@@ -1,0 +1,57 @@
+services:
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-ittech_supp}
+      MYSQL_USER: ${MYSQL_USER:-appuser}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-apppassword}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./backend/src/db/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    ports:
+      - '3306:3306'
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-p${MYSQL_ROOT_PASSWORD:-rootpassword}']
+      interval: 10s
+      timeout: 20s
+      retries: 10
+      start_period: 20s
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      DB_HOST: host.docker.internal
+      DB_USER: ${MYSQL_USER:-appuser}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-apppassword}
+      DB_NAME: ${MYSQL_DATABASE:-ittech_supp}
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      PORT: 5000
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    volumes:
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - '5000:5000'
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    depends_on:
+      - backend
+    ports:
+      - '80:80'
+
+volumes:
+  mysql_data:
